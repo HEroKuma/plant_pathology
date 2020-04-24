@@ -60,15 +60,15 @@ def train(opt):
                 correct_num = (correct_label == label).sum()
                 acc = correct_num.item()/label.size(0)
                 loss = criterion(outputs, label)
-
-                progress.set_description("epoch: {epoch}, Loss: {loss}".format(epoch=epoch, loss=loss))
-
                 loss.backward()
                 optimizer.step()
 
-                # if (i+1)%100 == 0:
-                #     print('Epoch [%d/%d], Iter [%d/%d] Loss: %.4f, Acc: %.4f' %\
-                #           (epoch+1, 20, i+1, len(dataloader), loss.item(), acc))
+                if (i+1)%5 == 0:
+                    progress.set_description("epoch: {epoch}, Iter {iter:.3f}, Loss: {loss}, acc: {acc}"\
+                                             .format(epoch=epoch, iter=(i+1)/len(dataloader), loss=loss, acc=acc))
+                    # print('Epoch [%d/%d], Iter [%d/%d] Loss: %.4f, Acc: %.4f' %\
+                    #       (epoch+1, 20, i+1, len(dataloader), loss.item(), acc))
+            print('')
 
 if __name__ == '__main__':
     opt = parse()
