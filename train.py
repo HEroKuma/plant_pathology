@@ -18,18 +18,25 @@ from torch.autograd import Variable
 
 import torch
 
-transforms_ = [transforms.Resize((512, 512), Image.BICUBIC),
+transforms_1 = [transforms.Resize((512, 512), Image.BICUBIC),
                    transforms.RandomHorizontalFlip(),
                    transforms.ToTensor(),
                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+
+transforms_2 = [transforms.Resize((256, 256), Image.BICUBIC),
+                   transforms.RandomHorizontalFlip(),
+                   transforms.ToTensor(),
+                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+
+transforms_ = transforms_2
 
 def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0)
     parser.add_argument('--n_epochs', type=int, default=100)
-    parser.add_argument('--batch', type=int, default=5)
+    parser.add_argument('--batch', type=int, default=4)
     parser.add_argument('--duration', type=int, default=10)
-    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--lr', type=float, default=0.005)
     parser.add_argument('--n_cpu', type=int, default=4)
     parser.add_argument('--gpu_num', type=str, default='1')
     opt = parser.parse_args()
@@ -40,9 +47,9 @@ def parse():
 
 def train(opt):
     os.environ["CUDA_VISIBLE_DEVICES"] = opt.gpu_num
-    cuda = True if torch.cuda.is_available() else False
 
-    model = SimpleCNN().cuda()
+    # model = SimpleCNN2().cuda()
+    model = ResNet18().cuda()
 
     data = Data('./', transforms_)
     data_size = len(data)
@@ -58,13 +65,16 @@ def train(opt):
     train_loader = torch.utils.data.DataLoader(data, batch_size=opt.batch, sampler=train_set, num_workers=opt.n_cpu)
     val_loader = torch.utils.data.DataLoader(data, batch_size=opt.batch, sampler=val_set, num_workers=opt.n_cpu)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=opt.lr)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=opt.lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=opt.lr, momentum=.9, weight_decay=5e-4)
     criterion = nn.CrossEntropyLoss()
 
     with tqdm.tqdm(total=opt.epoch, miniters=1, mininterval=0) as progress:
+        val_min = float('inf')
         for epoch in range(opt.n_epochs):
             model.train()
-            for i, batch in enumerate(train_loader):
+            test_correct = 0
+            for i, batch in enumerate(train_loader, 1):
                 images = Variable(batch['X']).cuda()
                 correct_label = Variable(batch['Y']).cuda()
 
@@ -72,21 +82,20 @@ def train(opt):
                 outputs = model(images)
                 _, label = torch.max(outputs, 1)
                 correct_num = (correct_label == label).sum()
-                acc = correct_num.item()/correct_label.size(0)
+                test_correct += correct_num.item()
+                acc = test_correct/(correct_label.size(0)*i)
                 loss = criterion(outputs, correct_label)
                 loss.backward()
                 optimizer.step()
 
-                if (i+1) % 5 == 0:
-                    progress.set_description("epoch: {epoch}, Iter {iter:.1f}%, Loss: {loss:.4f}"\
-                                             .format(epoch=epoch, iter=100*(i+1)/len(train_loader), loss=loss))
-                    # print('Epoch [%d/%d], Iter [%d/%d] Loss: %.4f, Acc: %.4f' %\
-                    #       (epoch+1, 20, i+1, len(dataloader), loss.item(), acc))
+                if i % 5 == 0:
+                    progress.set_description("epoch: {epoch}, Iter {iter:.1f}%, Loss: {loss:.4f}, acc: {acc:.2f}%}"\
+                                             .format(epoch=epoch, iter=100*(i+1)/len(train_loader),\
+                                             loss=loss, acc=acc*100))
 
             model.eval()
             correct = 0
             test_loss = 0
-            val_min = float('inf')
             for j, batch in enumerate(val_loader):
                 images = Variable(batch['X']).cuda()
                 correct_label = Variable(batch['Y']).cuda()
@@ -99,7 +108,7 @@ def train(opt):
                                                                    , acc=100*correct/(opt.batch*len(val_loader))),)
             if test_loss < val_min:
                 val_min = test_loss
-                torch.save(model.state_dict(), 'SimpleCNN')
+                torch.save(model.state_dict(), 'Res18')
                 print('\t==Model Saved==')
 
     predict(model)
@@ -107,11 +116,11 @@ def train(opt):
 
 def predict(model):
     testLoader = DataLoader(testData('./', transforms_), batch_size=1, num_workers=2)
-    model.eval()
+    # model.eval()
 
     with open('output.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['image_id','healthy','multiple_diseases','rust','scab'])
+        writer.writerow(['image_id', 'healthy', 'multiple_diseases', 'rust', 'scab'])
         for i, batch in enumerate(testLoader):
             predict_array = [batch[1][0], 0, 0, 0, 0]
             images = Variable(batch[0]).cuda()
@@ -119,6 +128,7 @@ def predict(model):
             _, label = torch.max(outputs, 1)
             predict_array[label.item()+1] = 1
             writer.writerow(predict_array)
+
 
 
 if __name__ == '__main__':
