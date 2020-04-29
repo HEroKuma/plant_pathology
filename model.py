@@ -10,6 +10,7 @@ from torchvision.models.inception import inception_v3, BasicConv2d
 __all__ = ['WSDAN']
 EPSILON = 1e-12
 
+
 class BAP(nn.Module):
     def __init__(self, pool='GAP'):
         super(BAP, self).__init__()
@@ -38,6 +39,7 @@ class BAP(nn.Module):
 
             feature_matrix = F.normalize(feature_matrix, dim=-1)
             return feature_matrix
+
 
 class WSDAN(nn.Module):
     def __init__(self, num_classes, M=32, net='inception_mixed_6e', pretrained=False):

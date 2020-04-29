@@ -2,68 +2,20 @@ import pandas as pd
 import cv2
 import numpy as np
 import os
+import torch
 import csv
 import argparse
 import tqdm
 from model import *
 from DataLoader import *
+import torch.nn as nn
 
-
-import torchvision.transforms as transforms
-from torchvision.utils import save_image
 from torch.utils.data.sampler import SubsetRandomSampler
 from sklearn.model_selection import StratifiedKFold
 
 from torch.utils.data import DataLoader
-from torchvision import datasets
 from torch.autograd import Variable
-
-import torch
-
-transforms_1 = [transforms.Resize((512, 512), Image.BICUBIC),
-                   transforms.RandomHorizontalFlip(),
-                   transforms.ToTensor(),
-                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-
-transforms_2 = [transforms.Resize((256, 256), Image.BICUBIC),
-                   transforms.RandomHorizontalFlip(),
-                   transforms.ToTensor(),
-                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-
-transforms_3 = [
-    transforms.CenterCrop(512),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(5),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0, 0, 0], std=[.3, .2, .1])
-]
-
-test_trans = [
-    transforms.CenterCrop(512),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0, 0, 0], std=[0.3, 0.2, 0.1])
-]
-
-transforms_ = transforms_3
-
-
-class DenseCrossEntropy(nn.Module):
-    def __init__(self):
-        super(DenseCrossEntropy, self).__init__()
-
-    def forward(self, y_pred, y_true):
-        y_pred = y_pred.float()
-        y_true = y_true.float()
-        output = torch.zeros((len(y_true), 4)).cuda()
-        for i in range(len(y_true)):
-            output[i][int(y_true[i].item())] = 1
-        y_true = output
-        logprobs = torch.log_softmax(y_pred, dim=-1)
-        # print(logprobs, y_true)
-        loss = -y_true * logprobs
-        loss = torch.sum(loss)
-
-        return loss.mean()
+from utils import CenterLoss, AverageMeter, TopKAccuracyMetric, ModelCheckpoint, batch_augment
 
 
 def parse():
@@ -82,24 +34,23 @@ def parse():
 
 def train(opt):
     os.environ["CUDA_VISIBLE_DEVICES"] = opt.gpu_num
-
-    # model = SimpleCNN2().cuda()
-    model = PlantModel(True).cuda()
-    # model = ResNet18().cuda()
+    model = WSDAN(True).cuda()
     optimizer = torch.optim.SGD(model.parameters(), lr=opt.lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=.95)
-    # criterion = nn.CrossEntropyLoss()
-    criterion = DenseCrossEntropy()
+    criterion = nn.CrossEntropyLoss()
+    center_loss = CenterLoss()
+    torch.backends.cudnn.benchmark = True
 
-    data = Data('./', transforms_)
-    """
-    data_size = len(data)
-    indices = list(range(data_size))
-    split = int(np.floor(.2*data_size))
-    np.random.seed(42)
-    np.random.shuffle(indices)
-    train_indices, val_indices = indices[split:], indices[:split]
-    """
+    loss_container = AverageMeter(name='loss')
+    raw_metric = TopKAccuracyMetric(topk=(1, 5))
+    crop_metric = TopKAccuracyMetric(topk=(1, 5))
+    drop_metric = TopKAccuracyMetric(topk=(1, 5))
+
+    # logging.basicConfig(
+    #     file=os
+    # )
+
+    data = Data('./')
     all_data = pd.read_csv('./train.csv')
     d = all_data.iloc[:, 0].values
     skf = StratifiedKFold(5, shuffle=True, random_state=412)
