@@ -30,7 +30,7 @@ class Data(Dataset):
 
 
 class testData(Dataset):
-    def __init__(self, root, resize=(512, 512), phase='train'):
+    def __init__(self, root, resize=(512, 512), phase='test'):
         self.file = pd.read_csv(os.path.join(root, 'test.csv'))
         self.index = self.file['image_id']
         self.transform = get_transform(resize, phase)
