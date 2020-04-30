@@ -22,8 +22,9 @@ from utils import CenterLoss, AverageMeter, TopKAccuracyMetric, ModelCheckpoint,
 def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0)
-    parser.add_argument('--n_epochs', type=int, default=1)
-    parser.add_argument('--batch', type=int, default=6)
+    parser.add_argument('--n_epochs', type=int, default=15)
+    parser.add_argument('--batch', type=int, default=10)
+    parser.add_argument('--beta', type=float, default=5e-2)
     parser.add_argument('--num_attentions', type=int, default=32)
     parser.add_argument('--net', type=str, default='inception_mixed_6e')
     parser.add_argument('--lr', type=float, default=0.001)
@@ -58,11 +59,12 @@ def train(opt):
     valdata = Data('./', phase='val')
     all_data = pd.read_csv('./train.csv')
     d = all_data.iloc[:, 0].values
-    skf = StratifiedKFold(5, shuffle=True, random_state=412)
+    skf = StratifiedKFold(5, shuffle=True, random_state=42)
     targets = all_data.iloc[:, [1, 2, 3, 4]].values
     train_y = targets[:, 0] + targets[:, 1]*2+targets[:, 2]*3
     val_min = float('inf')
     model_name = ''
+    #TODO: change res18 to se_ResNeXt
 
     for i_fold, (t, v) in enumerate(skf.split(d, train_y)):
         train_index = SubsetRandomSampler(t)
@@ -118,13 +120,13 @@ def train(opt):
                         epoch_crop_acc = crop_metric(y_pred_crop, correct_label)
                         epoch_drop_acc = drop_metric(y_pred_drop, correct_label)
 
-                    if i % 4 == 0:
+                    if i % 1 == 0:
                         des = "fold: {fold}, epoch: {epoch}, Iter {iter:.1f}%, Total Loss: {loss:.4f} ".format(
                             fold=i_fold, epoch=epoch,
-                            iter=100 * (i + 1) / len(train_loader),
-                            loss=batch_loss,
+                            iter=100 * i/len(train_loader),
+                            loss=epoch_loss,
                         )
-                        des_loss = "Raw Acc: ({r1:.2f},{r2:.2f}), Crop Acc: ({c1:.2f}, {c2:.2f}), Drop Acc: ({d1:.2f}, {d2:.2f}), acc: {acc:.2f}%, lr: {lr:.5f}".format(
+                        des_loss = "Raw Acc: ({r1},{r2}), Crop Acc: ({c1}, {c2}), Drop Acc: ({d1}, {d2}), acc: {acc:.2f}%, lr: {lr:.5f}".format(
                                                                     lr=scheduler.get_lr()[0], r1=epoch_raw_acc[0],
                                                                     c1=epoch_crop_acc[0], d1=epoch_drop_acc[0],
                                                                     r2=epoch_raw_acc[1], c2=epoch_crop_acc[1],
@@ -152,8 +154,9 @@ def train(opt):
 
                         epoch_acc = raw_metric(y_pred, correct_label)
                     test_loss += epoch_loss
-                print(" Test Loss: {loss:.4f}, acc: ({a1:.2f}, {a2:.2f}) {corr}/{data_size}".format(
-                    loss=epoch_loss,
+                test_loss = 100*test_loss/len(val_index)
+                print(" Test Loss: {loss:.5f}, acc: ({a1:.2f}, {a2:.2f}) {corr}/{data_size}".format(
+                    loss=test_loss,
                     a1=epoch_acc[0],
                     a2=epoch_acc[1],
                     corr=correct,
@@ -166,14 +169,13 @@ def train(opt):
                     print('\t==Model Saved with {fold}-{epoch}=='.format(fold=i_fold, epoch=epoch))
                 scheduler.step()
 
-    predict(model)
+    predict('wsdan.pth')
 
 
 def predict(model):
     testLoader = DataLoader(testData('./'), batch_size=1, num_workers=2)
-    # model = torch.load(name).cuda()
+    model = torch.load(model).cuda()
     model.eval()
-
     with open('output.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['image_id', 'healthy', 'multiple_diseases', 'rust', 'scab'])
@@ -186,10 +188,20 @@ def predict(model):
                 y_pred_crop, _, _ = model(crop_images)
                 y_pred = (outputs + y_pred_crop)/2
                 _, label = torch.max(y_pred, 1)
-                predict_array[label.item()+1] = 1
+                y_pred = softmax(y_pred.cpu().numpy()[0])
+                # predict_array[label.item()+1] = 1
+                # print(y_pred.cpu().numpy())
+                for j in range(1, 5):
+                    predict_array[j] = y_pred[j-1]
             writer.writerow(predict_array)
+
+
+def softmax(x):
+    e_x = np.exp(x-np.max(x))
+    return e_x/e_x.sum()
 
 
 if __name__ == '__main__':
     opt = parse()
     train(opt)
+    # predict('wsdan.pth')

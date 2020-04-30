@@ -1,13 +1,3 @@
-"""
-WS-DAN models
-
-Hu et al.,
-"See Better Before Looking Closer: Weakly Supervised Data Augmentation Network for Fine-Grained Visual Classification",
-arXiv:1901.09891
-
-Created: May 04,2019 - Yuchong Gu
-Revised: Dec 03,2019 - Yuchong Gu
-"""
 import logging
 import numpy as np
 import torch
@@ -58,9 +48,8 @@ class BAP(nn.Module):
         return feature_matrix
 
 
-# WS-DAN: Weakly Supervised Data Augmentation Network for FGVC
 class WSDAN(nn.Module):
-    def __init__(self, num_classes, M=32, net='inception_mixed_6e', pretrained=False):
+    def __init__(self, num_classes, M=16, net='inception_mixed_6e', pretrained=False):
         super(WSDAN, self).__init__()
         self.num_classes = num_classes
         self.M = M
