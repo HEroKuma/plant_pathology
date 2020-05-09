@@ -11,7 +11,7 @@ from scipy.io import loadmat
 
 
 class Data(Dataset):
-    def __init__(self, root, resize=(448, 448), phase='train'):
+    def __init__(self, root, resize=(384, 384), phase='train'):
         self.file = pd.read_csv(os.path.join(root, 'train.csv'))
         self.index = self.file['image_id']
         self.tag = self.file[['healthy', 'multiple_diseases', 'rust', 'scab']]
@@ -30,7 +30,7 @@ class Data(Dataset):
 
 
 class testData(Dataset):
-    def __init__(self, root, resize=(448, 448), phase='test'):
+    def __init__(self, root, resize=(384, 384), phase='test'):
         self.file = pd.read_csv(os.path.join(root, 'test.csv'))
         self.index = self.file['image_id']
         self.transform = get_transform(resize, phase)

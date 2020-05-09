@@ -7,6 +7,8 @@ import torch.nn.functional as F
 import models.vgg as vgg
 import models.resnet as resnet
 from models.inception import inception_v3, BasicConv2d
+from efficientnet_pytorch import EfficientNet
+import models.efficient_net as efficient
 
 __all__ = ['WSDAN']
 EPSILON = 1e-12
@@ -71,6 +73,9 @@ class WSDAN(nn.Module):
         elif 'resnet' in net:
             self.features = getattr(resnet, net)(pretrained=pretrained).get_features()
             self.num_features = 512 * self.features[-1][-1].expansion
+        elif 'efficient' in net:
+            self.features = EfficientNet.from_pretrained('efficientnet-b7', num_classes=512)
+            self.num_features = 2560
         else:
             raise ValueError('Unsupported net: %s' % net)
 
@@ -89,7 +94,11 @@ class WSDAN(nn.Module):
         batch_size = x.size(0)
 
         # Feature Maps, Attention Maps and Feature Matrix
-        feature_maps = self.features(x)
+        # f = EfficientNet.extract_features(x)
+        # print(x.shape)
+        # print(self.features._blocks[0])
+        feature_maps = self.features.extract_features(x)
+        # print(feature_maps.shape)
         if self.net != 'inception_mixed_7c':
             attention_maps = self.attentions(feature_maps)
         else:

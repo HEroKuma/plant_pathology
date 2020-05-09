@@ -24,12 +24,13 @@ def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0)
     parser.add_argument('--n_epochs', type=int, default=10)
-    parser.add_argument('--batch', type=int, default=8)
+    parser.add_argument('--batch', type=int, default=1)
     parser.add_argument('--beta', type=float, default=5e-2)
     parser.add_argument('--num_attentions', type=int, default=32)
     parser.add_argument('--ckpt', type=str, default=None)
-    parser.add_argument('--log', type=str, default='train_resnet34.log')
-    parser.add_argument('--net', type=str, default='resnet34')
+    parser.add_argument('--log', type=str, default='efficientnet-b1.log')
+    parser.add_argument('--net', type=str, default='efficientnet-b1')
+    # parser.add_argument('--net', type=str, default='resnet34')
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
     parser.add_argument('--momentum', type=float, default=.9)
@@ -102,6 +103,9 @@ def train(opt):
         with tqdm.tqdm(total=opt.epoch, miniters=1, mininterval=0) as progress:
             for epoch in range(1, opt.n_epochs+1):
                 model.train()
+                raw_rate = 0
+                crop_rate = 0
+                drop_rate = 0
                 for i, batch in enumerate(train_loader, 1):
                     loss_container.reset()
                     raw_metric.reset()
@@ -118,13 +122,13 @@ def train(opt):
 
                     # Attention Cropping
                     with torch.no_grad():
-                        crop_images = batch_augment(images, attention_map[:, :1, :, :], mode='crop', theta=(.4, .6), padding_ratio=.1)
+                        crop_images = batch_augment(images, attention_map[:, :1, :, :], mode='crop', theta=(.5, .6), padding_ratio=.1)
 
                     y_pred_crop, _, _ = model(crop_images)
 
                     # Attention Dropping
                     with torch.no_grad():
-                        drop_images = batch_augment(images, attention_map[:, :1, :, :], mode='drop', theta=(.2, .5))
+                        drop_images = batch_augment(images, attention_map[:, :1, :, :], mode='drop', theta=(.3, .5))
 
                     y_pred_drop, _, _ = model(drop_images)
 
@@ -141,15 +145,22 @@ def train(opt):
                         epoch_crop_acc = crop_metric(y_pred_crop, correct_label)
                         epoch_drop_acc = drop_metric(y_pred_drop, correct_label)
 
-                    if i % 20 == 0:
+                    raw_rate = raw_rate + epoch_raw_acc[0]
+                    crop_rate = crop_rate + epoch_crop_acc[0]
+                    drop_rate = drop_rate + epoch_drop_acc[0]
+
+                    if i % 1 == 0:
                         des = "Fold: {fold}, epoch: {epoch}, Iter {iter:.1f}%, Total Loss: {loss:.4f} ".format(
                             fold=i_fold, epoch=epoch,
                             iter=100 * i/len(train_loader),
                             loss=epoch_loss,
                         )
+                        # des_loss = "Raw Acc: {r1:.2f}, Crop Acc: {c1:.2f}, Drop Acc: {d1:.2f}, lr: {lr:.5f}".format(
+                        #                                             lr=scheduler.get_lr()[0], r1=epoch_raw_acc[0],
+                        #                                             c1=epoch_crop_acc[0], d1=epoch_drop_acc[0])
                         des_loss = "Raw Acc: {r1:.2f}, Crop Acc: {c1:.2f}, Drop Acc: {d1:.2f}, lr: {lr:.5f}".format(
-                                                                    lr=scheduler.get_lr()[0], r1=epoch_raw_acc[0],
-                                                                    c1=epoch_crop_acc[0], d1=epoch_drop_acc[0])
+                                                                    lr=scheduler.get_lr()[0], r1=raw_rate/len(train_loader),
+                                                                    c1=crop_rate/len(train_loader), d1=drop_rate/len(train_loader))
                         progress.set_description(des+des_loss)
                 des = "Fold: {fold}, epoch: {epoch}, Total Loss: {loss:.4f} ".format(
                     fold=i_fold, epoch=epoch,
@@ -230,3 +241,4 @@ def softmax(x):
 if __name__ == '__main__':
     opt = parse()
     train(opt)
+    predict('val_wsdan_{}.pth'.format('inception_mixed_6e'))
