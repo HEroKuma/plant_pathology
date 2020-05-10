@@ -24,10 +24,10 @@ from efficientnet_pytorch import EfficientNet
 def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0)
-    parser.add_argument('--n_epochs', type=int, default=20)
-    parser.add_argument('--batch', type=int, default=2)
+    parser.add_argument('--n_epochs', type=int, default=10)
+    parser.add_argument('--batch', type=int, default=8)
     parser.add_argument('--beta', type=float, default=5e-2)
-    parser.add_argument('--size', type=int, default=512)
+    parser.add_argument('--size', type=int, default=256)
     parser.add_argument('--num_attentions', type=int, default=32)
     parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('--log', type=str, default='efficientnet-b7.log')
@@ -136,7 +136,7 @@ def train(opt):
 
                 if test_loss < val_min:
                     val_min = test_loss
-                    torch.save(model, 'val_eff_{}.pth'.format(opt.net))
+                    torch.save(model, 'val_eff7.pth')
                     print('\tTest Model Saved')
                     logging.info('Test Model Saved')
                 scheduler.step()
@@ -144,7 +144,7 @@ def train(opt):
 
 def predict(opt, model):
     testLoader = DataLoader(testData('./', resize=(opt.size, opt.size)), batch_size=1, num_workers=2)
-    model = torch.load(model).cpu()
+    model = torch.load(model).cuda()
     model.eval()
     count = 0
     with open('output.csv', 'w', newline='') as csvfile:
@@ -152,7 +152,7 @@ def predict(opt, model):
         writer.writerow(['image_id', 'healthy', 'multiple_diseases', 'rust', 'scab'])
         for i, batch in enumerate(testLoader):
             predict_array = [batch[1][0], 0, 0, 0, 0]
-            images = Variable(batch[0])
+            images = Variable(batch[0]).cuda()
             if count % 50 == 0:
                 print(count)
             count += 1
@@ -160,7 +160,7 @@ def predict(opt, model):
                 outputs = model(images)
                 y_pred = outputs
                 _, label = torch.max(y_pred, 1)
-                y_pred = softmax(y_pred.numpy()[0])
+                y_pred = softmax(y_pred.cpu().numpy()[0])
                 for j in range(1, 5):
                     predict_array[j] = y_pred[j-1]
             writer.writerow(predict_array)
@@ -173,5 +173,5 @@ def softmax(x):
 
 if __name__ == '__main__':
     opt = parse()
-    train(opt)
-    # predict(opt, 'val_eff_{}.pth'.format('efficientnet-b7'))
+    # train(opt)
+    predict(opt, 'val_eff{}.pth'.format('7'))
