@@ -24,14 +24,14 @@ from efficientnet_pytorch import EfficientNet
 def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0)
-    parser.add_argument('--n_epochs', type=int, default=10)
-    parser.add_argument('--batch', type=int, default=8)
+    parser.add_argument('--n_epochs', type=int, default=20)
+    parser.add_argument('--batch', type=int, default=2)
     parser.add_argument('--beta', type=float, default=5e-2)
     parser.add_argument('--size', type=int, default=512)
     parser.add_argument('--num_attentions', type=int, default=32)
     parser.add_argument('--ckpt', type=str, default=None)
-    parser.add_argument('--log', type=str, default='efficientnet-b1.log')
-    parser.add_argument('--net', type=str, default='efficientnet-b1')
+    parser.add_argument('--log', type=str, default='efficientnet-b7.log')
+    parser.add_argument('--net', type=str, default='efficientnet-b7')
     # parser.add_argument('--net', type=str, default='resnet34')
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
@@ -59,7 +59,7 @@ def train(opt):
 
     os.environ["CUDA_VISIBLE_DEVICES"] = opt.gpu_num
     # model = WSDAN(num_classes=4, M=opt.num_attentions, net=opt.net, pretrained=True).cuda()
-    model = EfficientNet.from_pretrained("efficientnet-b1", advprop=True).cuda()
+    model = EfficientNet.from_pretrained("efficientnet-b7", advprop=True).cuda()
     optimizer = torch.optim.SGD(model.parameters(), lr=opt.lr, momentum=opt.momentum, weight_decay=opt.weight_decay)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opt.scheduler_step, gamma=opt.gamma)
     loss = nn.CrossEntropyLoss()
@@ -68,7 +68,7 @@ def train(opt):
     logging.info('Network weights save to {}'.format(opt))
 
     data = Data('./', resize=(opt.size, opt.size))
-    valdata = Data('./', phase='val', resize=(opt.size*0.875, opt.size*0.875))
+    valdata = Data('./', phase='val', resize=(opt.size, opt.size))
     all_data = pd.read_csv('./train.csv')
     d = all_data.iloc[:, 0].values
     skf = StratifiedKFold(5, shuffle=True, random_state=42)
@@ -112,7 +112,7 @@ def train(opt):
 
                 if train_loss < train_loss:
                     train_loss = train_loss
-                    torch.save(model, 'train_wsdan_{}.pth'.format(opt.net))
+                    torch.save(model, 'train_eff_{}.pth'.format(opt.net))
                     print('\t Train Model Saved')
                     logging.info('Train Model Saved')
 
@@ -136,29 +136,31 @@ def train(opt):
 
                 if test_loss < val_min:
                     val_min = test_loss
-                    torch.save(model, 'val_wsdan_{}.pth'.format(opt.net))
+                    torch.save(model, 'val_eff_{}.pth'.format(opt.net))
                     print('\tTest Model Saved')
                     logging.info('Test Model Saved')
                 scheduler.step()
 
 
-def predict(model):
-    testLoader = DataLoader(testData('./'), batch_size=1, num_workers=2)
-    model = torch.load(model).cuda()
+def predict(opt, model):
+    testLoader = DataLoader(testData('./', resize=(opt.size, opt.size)), batch_size=1, num_workers=2)
+    model = torch.load(model).cpu()
     model.eval()
+    count = 0
     with open('output.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['image_id', 'healthy', 'multiple_diseases', 'rust', 'scab'])
         for i, batch in enumerate(testLoader):
             predict_array = [batch[1][0], 0, 0, 0, 0]
-            images = Variable(batch[0]).cuda()
+            images = Variable(batch[0])
+            if count % 50 == 0:
+                print(count)
+            count += 1
             with torch.no_grad():
-                outputs, _, attention_map = model(images)
-                crop_images = batch_augment(images, attention_map, mode='crop', theta=.1, padding_ratio=.05)
-                y_pred_crop, _, _ = model(crop_images)
-                y_pred = (outputs + y_pred_crop)/2
+                outputs = model(images)
+                y_pred = outputs
                 _, label = torch.max(y_pred, 1)
-                y_pred = softmax(y_pred.cpu().numpy()[0])
+                y_pred = softmax(y_pred.numpy()[0])
                 for j in range(1, 5):
                     predict_array[j] = y_pred[j-1]
             writer.writerow(predict_array)
@@ -172,4 +174,4 @@ def softmax(x):
 if __name__ == '__main__':
     opt = parse()
     train(opt)
-    predict('val_wsdan_{}.pth'.format('inception_mixed_6e'))
+    # predict(opt, 'val_eff_{}.pth'.format('efficientnet-b7'))
