@@ -24,12 +24,12 @@ def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epoch', type=int, default=0)
     parser.add_argument('--n_epochs', type=int, default=10)
-    parser.add_argument('--batch', type=int, default=1)
+    parser.add_argument('--batch', type=int, default=2)
     parser.add_argument('--beta', type=float, default=5e-2)
     parser.add_argument('--num_attentions', type=int, default=32)
     parser.add_argument('--ckpt', type=str, default=None)
-    parser.add_argument('--log', type=str, default='efficientnet-b1.log')
-    parser.add_argument('--net', type=str, default='efficientnet-b1')
+    parser.add_argument('--log', type=str, default='efficientnet-b5.log')
+    parser.add_argument('--net', type=str, default='efficientnet-b6')
     # parser.add_argument('--net', type=str, default='resnet34')
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--weight_decay', type=float, default=1e-5)
@@ -99,7 +99,7 @@ def train(opt):
         train_index = SubsetRandomSampler(t)
         val_index = SubsetRandomSampler(v)
         train_loader = torch.utils.data.DataLoader(data, batch_size=opt.batch, sampler=train_index, num_workers=opt.n_cpu)
-        val_loader = torch.utils.data.DataLoader(valdata, batch_size=opt.batch, sampler=val_index, num_workers=opt.n_cpu)
+        val_loader = torch.utils.data.DataLoader(valdata, batch_size=1, sampler=val_index, num_workers=opt.n_cpu)
         with tqdm.tqdm(total=opt.epoch, miniters=1, mininterval=0) as progress:
             for epoch in range(1, opt.n_epochs+1):
                 model.train()
@@ -241,4 +241,4 @@ def softmax(x):
 if __name__ == '__main__':
     opt = parse()
     train(opt)
-    predict('val_wsdan_{}.pth'.format('inception_mixed_6e'))
+    predict('val_wsdan_{}.pth'.format('efficientnet-b5'))

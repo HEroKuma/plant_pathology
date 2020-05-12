@@ -74,8 +74,15 @@ class WSDAN(nn.Module):
             self.features = getattr(resnet, net)(pretrained=pretrained).get_features()
             self.num_features = 512 * self.features[-1][-1].expansion
         elif 'efficient' in net:
-            self.features = EfficientNet.from_pretrained('efficientnet-b7', num_classes=512)
-            self.num_features = 2560
+            feature_num = {'efficientnet-b1': 1280,
+                           'efficientnet-b2': 1408,
+                           'efficientnet-b3': 1536,
+                           'efficientnet-b4': 1792,
+                           'efficientnet-b5': 2048,
+                           'efficientnet-b6': 2304,
+                           'efficientnet-b7': 2480}
+            self.features = EfficientNet.from_pretrained(net).cuda().extract_features
+            self.num_features = feature_num[net]
         else:
             raise ValueError('Unsupported net: %s' % net)
 
@@ -97,7 +104,8 @@ class WSDAN(nn.Module):
         # f = EfficientNet.extract_features(x)
         # print(x.shape)
         # print(self.features._blocks[0])
-        feature_maps = self.features.extract_features(x)
+        # feature_maps = self.features.extract_features(x)
+        feature_maps = self.features(x)
         # print(feature_maps.shape)
         if self.net != 'inception_mixed_7c':
             attention_maps = self.attentions(feature_maps)

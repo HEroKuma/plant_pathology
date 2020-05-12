@@ -174,12 +174,12 @@ def get_transform(resize, phase='train'):
             transforms.RandomHorizontalFlip(0.5),
             transforms.ColorJitter(brightness=0.126, saturation=0.5),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.4, 0.4, 0.4])
         ])
     else:
         return transforms.Compose([
             transforms.Resize(size=(int(resize[0] / 0.875), int(resize[1] / 0.875))),
             transforms.CenterCrop(resize),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.4, 0.4, 0.4])
         ])
